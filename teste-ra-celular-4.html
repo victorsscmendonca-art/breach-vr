@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Protoboard real · RA no celular</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:16px system-ui;color:white;background:transparent;overflow:hidden}
+#inicio{position:fixed;inset:0;z-index:20;background:#102333;padding:25px;overflow:auto}h1{font-size:26px}p{line-height:1.5}a{color:#72efcc}button{padding:12px;border:0;border-radius:8px;background:#69e7c0;color:#09241e;font:bold 16px system-ui;cursor:pointer}button:disabled{opacity:.5}
+#aviso{position:fixed;top:12px;left:12px;right:12px;z-index:10;background:#102333e8;padding:10px;border-radius:8px;font-size:14px;pointer-events:none}
+#controles{position:fixed;bottom:12px;left:12px;right:12px;z-index:10;background:#102333ed;padding:12px;border-radius:12px;max-height:48vh;overflow:auto}#controles p{font-size:14px;margin:8px 0}details{margin-top:10px}label{display:block;margin:8px 0}input{width:100%}.linha{display:flex;gap:8px;justify-content:space-between;align-items:center}.oculto{display:none!important}a-scene{position:fixed!important;inset:0;width:100%!important;height:100%!important;z-index:1}video{z-index:0!important}#erro{color:#ffce89;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<section id="inicio">
+<h1>Seu protoboard, pela câmera</h1>
+<p>Este teste mostra uma etiqueta virtual ao lado de um marcador. Não existe modelo 3D do circuito nem reconhecimento dos componentes.</p>
+<ol><li>Abra o marcador HIRO abaixo no Chromebook ou imprima-o com uma margem branca.</li><li>Coloque-o ao lado do protoboard, imóvel. Mantenha a palavra HIRO voltada para você.</li><li>No celular, toque em iniciar e permita a câmera. Enquadre o marcador inteiro.</li></ol>
+<p><a href="https://raw.githubusercontent.com/AR-js-org/AR.js/3.4.7/data/images/hiro.png" target="_blank" rel="noopener">Abrir marcador HIRO</a></p>
+<p>É um marcador próprio de RA, não um QR Code comum. Ele deve continuar visível para a etiqueta aparecer.</p>
+<button id="iniciar">Iniciar câmera traseira</button><p id="erro" role="status"></p>
+<p><small>Use o Chrome e um link HTTPS, como GitHub Pages. Não abra apenas o arquivo baixado ou dentro da prévia do ChatGPT. Precisa de internet para carregar as bibliotecas. O código não envia imagens a um servidor.</small></p>
+</section>
+<div id="aviso" class="oculto" role="status">Iniciando câmera…</div>
+<section id="controles" class="oculto">
+<div class="linha"><strong id="nome">RC522</strong><button id="proximo">Próximo</button><button id="parar">Parar</button></div>
+<p id="explica"></p>
+<details><summary>Ajustar etiqueta ao componente real</summary>
+<p>As distâncias usam a largura da borda preta do marcador como unidade. Ajuste cada componente separadamente.</p>
+<label>Direita / esquerda <input id="x" type="range" min="-5" max="5" step="0.05" value="1.5"></label>
+<label>Frente / fundo <input id="z" type="range" min="-5" max="5" step="0.05" value="0"></label>
+<label>Altura <input id="y" type="range" min="0" max="3" step="0.05" value="0.6"></label>
+</details>
+</section>
+<script>
+const $=id=>document.getElementById(id);
+const itens=[['RC522','Lê o identificador do cartão.'],['ESP32','Verifica o cadastro e decide se libera o acesso.'],['LCD','Mostra o nome e o resultado da leitura.'],['Servo','Movimenta a cancela quando recebe o comando.']];
+const medidas=itens.map(()=>({x:1.5,y:.6,z:0}));let etapa=0,iniciando=false;
+function atualizar(){const d=medidas[etapa];$('nome').textContent=itens[etapa][0];$('explica').textContent=itens[etapa][1];for(const k of ['x','y','z'])$(k).value=d[k];const e=$('etiqueta');if(e){e.setAttribute('position',`${d.x} ${d.y} ${d.z}`);e.setAttribute('placa','texto',itens[etapa][0])}}
+$('proximo').onclick=()=>{etapa=(etapa+1)%itens.length;atualizar()};
+for(const k of ['x','y','z'])$(k).oninput=()=>{medidas[etapa][k]=Number($(k).value);atualizar()};
+function encerrar(){document.querySelectorAll('video').forEach(v=>{v.srcObject?.getTracks().forEach(t=>t.stop())})}
+$('parar').onclick=()=>{encerrar();location.reload()};window.addEventListener('pagehide',encerrar);
+function carregar(url){return new Promise((ok,erro)=>{const s=document.createElement('script');s.src=url;s.onload=ok;s.onerror=()=>erro(Error('Falha ao baixar biblioteca. Confira a internet e recarregue.'));document.head.append(s)})}
+$('iniciar').onclick=async()=>{
+if(iniciando)return;
+if(location.protocol!=='https:'&&location.hostname!=='localhost'){$('erro').textContent='Publique este HTML no GitHub Pages e abra o link HTTPS no Chrome.';return}
+if(!navigator.mediaDevices?.getUserMedia){$('erro').textContent='Câmera indisponível. Abra no Chrome, fora da prévia de outros aplicativos.';return}
+iniciando=true;$('iniciar').disabled=true;$('erro').textContent='Carregando recursos da câmera…';
+try{
+await carregar('https://aframe.io/releases/1.6.0/aframe.min.js');
+await carregar('https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js');
+AFRAME.registerComponent('placa',{
+schema:{texto:{default:'RC522'}},
+init:function(){const T=AFRAME.THREE;this.c=document.createElement('canvas');this.c.width=512;this.c.height=192;this.tex=new T.CanvasTexture(this.c);this.sprite=new T.Sprite(new T.SpriteMaterial({map:this.tex,depthTest:false}));this.sprite.scale.set(1.5,.56,1);this.el.object3D.add(this.sprite);const line=new T.Line(new T.BufferGeometry().setFromPoints([new T.Vector3(0,-.3,0),new T.Vector3(0,-.55,0)]),new T.LineBasicMaterial({color:0x69e7c0}));this.el.object3D.add(line)},
+update:function(){if(!this.c)return;const c=this.c.getContext('2d');c.clearRect(0,0,512,192);c.fillStyle='#102333';c.fillRect(0,0,512,192);c.fillStyle='#69e7c0';c.fillRect(0,0,10,192);c.font='bold 64px sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(this.data.texto,256,96,470);this.tex.needsUpdate=true}
+});
+window.addEventListener('camera-error',()=>{$('aviso').textContent='Câmera bloqueada ou ocupada. Permita a câmera nas configurações do site e recarregue.'});
+window.addEventListener('camera-init',()=>{$('aviso').textContent='Câmera ligada. Enquadre o marcador HIRO inteiro.'});
+const cena=document.createElement('a-scene');
+cena.setAttribute('embedded','');cena.setAttribute('vr-mode-ui','enabled: false');cena.setAttribute('renderer','alpha: true; antialias: true');cena.setAttribute('arjs','sourceType: webcam; debugUIEnabled: false; detectionMode: mono;');
+cena.innerHTML='<a-marker preset="hiro" emitevents="true"><a-entity id="etiqueta" position="1.5 0.6 0" placa="texto: RC522"></a-entity></a-marker><a-entity camera></a-entity>';
+const marker=cena.querySelector('a-marker');marker.addEventListener('markerFound',()=>{$('aviso').textContent='Marcador encontrado. Ajuste a etiqueta sobre o componente.'});marker.addEventListener('markerLost',()=>{$('aviso').textContent='Marcador fora de vista. Enquadre novamente toda a borda preta.'});
+document.body.append(cena);$('inicio').classList.add('oculto');$('aviso').classList.remove('oculto');$('controles').classList.remove('oculto');atualizar();
+setTimeout(()=>{const v=document.querySelector('video');if(!v||v.readyState<2)$('aviso').textContent='Aguardando câmera. Confira a permissão do Chrome. Se não iniciar, toque em Parar e tente novamente.'},15000);
+}catch(e){$('erro').textContent=e.message+' Recarregue para tentar novamente.';$('iniciar').textContent='Recarregar';$('iniciar').disabled=false;$('iniciar').onclick=()=>location.reload()}
+};atualizar();
+</script></body></html>
